@@ -63,20 +63,20 @@ func TestReviewRepositoryFindOne(t *testing.T) {
 	testTable := []struct {
 		name           string
 		inputReview    *model.Review
-		mockBehaviour  func(uint) (*model.Review, error)
+		find           func(uint) (*model.Review, error)
 		expectedReview *model.Review
 		expectError    bool
 	}{
 		{
 			name:           "valid",
 			inputReview:    baseReview,
-			mockBehaviour:  store.Review().FindOne,
+			find:           store.Review().FindOne,
 			expectedReview: baseReview,
 		},
 		{
 			name:        "invalid id",
 			inputReview: baseReview,
-			mockBehaviour: func(u uint) (*model.Review, error) {
+			find: func(u uint) (*model.Review, error) {
 				return store.Review().FindOne(0)
 			},
 			expectError: true,
@@ -87,7 +87,7 @@ func TestReviewRepositoryFindOne(t *testing.T) {
 		t.Run(testcase.name, func(t *testing.T) {
 			store.Review().Create(baseReview)
 
-			resultReview, err := testcase.mockBehaviour(baseReview.ID)
+			resultReview, err := testcase.find(baseReview.ID)
 
 			if !testcase.expectError {
 				assert.NoError(t, err)
