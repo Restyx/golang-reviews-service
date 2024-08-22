@@ -1,6 +1,8 @@
 package messagehandler
 
 import (
+	"fmt"
+
 	"github.com/Restyx/golang-reviews-service/internal/model"
 	"github.com/Restyx/golang-reviews-service/internal/store"
 )
@@ -8,8 +10,8 @@ import (
 type ServiceI interface {
 	Create(*model.Review) error
 	Update(*model.Review) error
-	Delete(uint) error
-	ReadOne(uint) (*model.Review, error)
+	Delete(int) error
+	ReadOne(int) (*model.Review, error)
 	ReadAll() ([]model.Review, error)
 }
 
@@ -24,18 +26,28 @@ func NewService(store store.StoreI) ServiceI {
 }
 
 func (h *Service) Create(data *model.Review) error {
-	return h.store.Review().Create(data)
+	_, err := h.store.Review().Create(data)
+	return err
 }
 
 func (h *Service) Update(data *model.Review) error {
-	return h.store.Review().Update(data)
+	rowCnt, err := h.store.Review().Update(data)
+	if rowCnt == 0 && err == nil {
+		err = fmt.Errorf("record not found")
+	}
+	return err
 }
 
-func (h *Service) Delete(id uint) error {
-	return h.store.Review().Delete(id)
+func (h *Service) Delete(id int) error {
+	rowCnt, err := h.store.Review().Delete(id)
+	if rowCnt == 0 && err == nil {
+		err = fmt.Errorf("record not found")
+	}
+
+	return err
 }
 
-func (h *Service) ReadOne(id uint) (*model.Review, error) {
+func (h *Service) ReadOne(id int) (*model.Review, error) {
 	return h.store.Review().FindOne(id)
 }
 

@@ -10,18 +10,17 @@ type ReviewRepository struct {
 	store *Store
 }
 
-func (r *ReviewRepository) Create(review *model.Review) error {
+func (r *ReviewRepository) Create(review *model.Review) (int64, error) {
 	if err := review.Validate(); err != nil {
-		return err
+		return 0, err
 	}
 
-	return r.store.db.QueryRow(
-		"INSERT INTO reviews (author, rating, title, description) VALUES ($1, $2, $3, $4) RETURNING id",
-		review.Author,
-		review.Rating,
-		review.Title,
-		review.Description,
-	).Scan(&review.ID)
+	err := r.store.db.QueryRow("INSERT INTO reviews (author, rating, title, description) VALUES ($1, $2, $3, $4) RETURNING id", review.Author, review.Rating, review.Title, review.Description).Scan(&review.ID)
+	if err != nil {
+		return 0, err
+	}
+
+	return int64(review.ID), nil
 }
 
 func (r *ReviewRepository) FindAll() ([]model.Review, error) {
@@ -49,7 +48,7 @@ func (r *ReviewRepository) FindAll() ([]model.Review, error) {
 	return reviews, nil
 }
 
-func (r *ReviewRepository) FindOne(id uint) (*model.Review, error) {
+func (r *ReviewRepository) FindOne(id int) (*model.Review, error) {
 	review := &model.Review{}
 	if err := r.store.db.QueryRow("SELECT id, author, rating, title, description FROM reviews WHERE id=$1", id).Scan(&review.ID, &review.Author, &review.Rating, &review.Title, &review.Description); err != nil {
 		return nil, err
@@ -58,13 +57,13 @@ func (r *ReviewRepository) FindOne(id uint) (*model.Review, error) {
 	return review, nil
 }
 
-func (r *ReviewRepository) Update(updateReview *model.Review) error {
+func (r *ReviewRepository) Update(updateReview *model.Review) (int64, error) {
 	if updateReview.ID == 0 {
-		return fmt.Errorf("id is required")
+		return 0, fmt.Errorf("id is required")
 	}
 
 	if err := updateReview.Validate(); err != nil {
-		return err
+		return 0, err
 	}
 
 	sqlQuery := `UPDATE reviews
@@ -74,15 +73,39 @@ func (r *ReviewRepository) Update(updateReview *model.Review) error {
 	title = COALESCE(NULLIF($4, ''), title), 
 	description = COALESCE(NULLIF($5, ''), description)
 	WHERE id = $1
-	RETURNING id, author, rating, title, description`
+	RETURNING author, rating, title, description`
 
-	return r.store.db.QueryRow(sqlQuery, updateReview.ID, updateReview.Author, updateReview.Rating, updateReview.Title, updateReview.Description).Scan(&updateReview.ID, &updateReview.Author, &updateReview.Rating, &updateReview.Title, &updateReview.Description)
-}
-
-func (r *ReviewRepository) Delete(id uint) error {
-	if err := r.store.db.QueryRow("DELETE FROM reviews WHERE id=$1 RETURNING id", id).Scan(&id); err != nil {
-		return err
+	stmt, err := r.store.db.Prepare(sqlQuery)
+	if err != nil {
+		return 0, err
 	}
 
-	return nil
+	res, err := stmt.Exec(updateReview.ID, updateReview.Author, updateReview.Rating, updateReview.Title, updateReview.Description)
+	if err != nil {
+		return 0, err
+	}
+
+	rowCnt, err := res.RowsAffected()
+	if err != nil {
+		return 0, err
+	}
+
+	return rowCnt, nil
+}
+
+func (r *ReviewRepository) Delete(id int) (int64, error) {
+	stmt, err := r.store.db.Prepare("DELETE FROM reviews WHERE id=$1")
+	if err != nil {
+		return 0, err
+	}
+	res, err := stmt.Exec(id)
+	if err != nil {
+		return 0, err
+	}
+	rowCnt, err := res.RowsAffected()
+	if err != nil {
+		return 0, err
+	}
+
+	return rowCnt, nil
 }

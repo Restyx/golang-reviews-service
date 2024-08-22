@@ -8,19 +8,19 @@ import (
 
 type ReviewRepository struct {
 	store   *Store
-	reviews map[uint]*model.Review
+	reviews map[int]*model.Review
 }
 
-func (r *ReviewRepository) Create(review *model.Review) error {
+func (r *ReviewRepository) Create(review *model.Review) (int64, error) {
 	if err := review.Validate(); err != nil {
-		return err
+		return 0, err
 	}
 
 	review.ID = uint(len(r.reviews) + 1)
 
-	r.reviews[review.ID] = review
+	r.reviews[int(review.ID)] = review
 
-	return nil
+	return int64(review.ID), nil
 }
 
 func (r *ReviewRepository) FindAll() ([]model.Review, error) {
@@ -33,7 +33,7 @@ func (r *ReviewRepository) FindAll() ([]model.Review, error) {
 	return result, nil
 }
 
-func (r *ReviewRepository) FindOne(id uint) (*model.Review, error) {
+func (r *ReviewRepository) FindOne(id int) (*model.Review, error) {
 	review, ok := r.reviews[id]
 	if !ok {
 		return nil, fmt.Errorf("record not found")
@@ -42,18 +42,18 @@ func (r *ReviewRepository) FindOne(id uint) (*model.Review, error) {
 	return review, nil
 }
 
-func (r *ReviewRepository) Update(updatedReview *model.Review) error {
+func (r *ReviewRepository) Update(updatedReview *model.Review) (int64, error) {
 	if updatedReview.ID == 0 {
-		return fmt.Errorf("id is required")
+		return 0, fmt.Errorf("id is required")
 	}
 
 	if err := updatedReview.Validate(); err != nil {
-		return err
+		return 0, err
 	}
 
-	review, ok := r.reviews[updatedReview.ID]
+	review, ok := r.reviews[int(updatedReview.ID)]
 	if !ok {
-		return fmt.Errorf("record not found")
+		return 0, fmt.Errorf("record not found")
 	}
 
 	if updatedReview.Author != "" {
@@ -77,16 +77,16 @@ func (r *ReviewRepository) Update(updatedReview *model.Review) error {
 		updatedReview.Description = review.Description
 	}
 
-	return nil
+	return 1, nil
 }
 
-func (r *ReviewRepository) Delete(id uint) error {
+func (r *ReviewRepository) Delete(id int) (int64, error) {
 	_, ok := r.reviews[id]
 	if !ok {
-		return fmt.Errorf("record not found")
+		return 0, nil
 	}
 
 	delete(r.reviews, id)
 
-	return nil
+	return 1, nil
 }

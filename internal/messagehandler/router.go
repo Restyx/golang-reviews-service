@@ -40,7 +40,7 @@ func (r *messageRouter) HandleMessages(messages <-chan amqp091.Delivery) {
 
 		switch message.Pattern {
 		case readReviewPattern:
-			review, err := r.service.ReadOne(message.Data.ID)
+			review, err := r.service.ReadOne(int(message.Data.ID))
 			r.rejectOnError(msg, err)
 
 			parsedReview, err := json.Marshal(review)
@@ -74,7 +74,7 @@ func (r *messageRouter) HandleMessages(messages <-chan amqp091.Delivery) {
 			msg.Ack(false)
 
 		case deleteReviewPattern:
-			err := r.service.Delete(message.Data.ID)
+			err := r.service.Delete(int(message.Data.ID))
 			r.rejectOnError(msg, err)
 
 			msg.Ack(false)

@@ -152,7 +152,7 @@ func TestMessageHandlerService_Update(t *testing.T) {
 			service.Create(testcase.inputReview)
 			err := testcase.mockBehaviour(testcase.inputReview.ID, testcase.inputUpdate)
 
-			actualReview, _ := service.ReadOne(testcase.inputReview.ID)
+			actualReview, _ := service.ReadOne(int(testcase.inputReview.ID))
 
 			if !testcase.expectError {
 				assert.NoError(t, err)
@@ -177,7 +177,7 @@ func TestMessageHandlerService_Delete(t *testing.T) {
 
 	testTable := []struct {
 		name          string
-		mockBehaviour func(uint) error
+		mockBehaviour func(int) error
 		expectError   bool
 	}{
 		{
@@ -186,7 +186,7 @@ func TestMessageHandlerService_Delete(t *testing.T) {
 		},
 		{
 			name: "invalid id",
-			mockBehaviour: func(u uint) error {
+			mockBehaviour: func(u int) error {
 				return service.Delete(0)
 			},
 			expectError: true,
@@ -196,17 +196,17 @@ func TestMessageHandlerService_Delete(t *testing.T) {
 	for _, testcase := range testTable {
 		t.Run(testcase.name, func(t *testing.T) {
 			service.Create(baseReview)
-			err := testcase.mockBehaviour(baseReview.ID)
+			err := testcase.mockBehaviour(int(baseReview.ID))
 
 			if !testcase.expectError {
 				assert.NoError(t, err)
 
-				actualReview, err := service.ReadOne(baseReview.ID)
+				actualReview, err := service.ReadOne(int(baseReview.ID))
 				assert.Nil(t, actualReview)
 				assert.Error(t, err)
 			} else {
 				assert.Error(t, err)
-				actualReview, err := service.ReadOne(baseReview.ID)
+				actualReview, err := service.ReadOne(int(baseReview.ID))
 				assert.NotNil(t, actualReview)
 				assert.NoError(t, err)
 
@@ -228,7 +228,7 @@ func TestMessageHandlerService_ReadOne(t *testing.T) {
 	testTable := []struct {
 		name           string
 		inputReview    *model.Review
-		mockBehaviour  func(uint) (*model.Review, error)
+		mockBehaviour  func(int) (*model.Review, error)
 		expectedReview *model.Review
 		expectError    bool
 	}{
@@ -241,7 +241,7 @@ func TestMessageHandlerService_ReadOne(t *testing.T) {
 		{
 			name:        "invalid id",
 			inputReview: baseReview,
-			mockBehaviour: func(u uint) (*model.Review, error) {
+			mockBehaviour: func(u int) (*model.Review, error) {
 				return service.ReadOne(0)
 			},
 			expectError: true,
@@ -252,7 +252,7 @@ func TestMessageHandlerService_ReadOne(t *testing.T) {
 		t.Run(testcase.name, func(t *testing.T) {
 			service.Create(baseReview)
 
-			resultReview, err := testcase.mockBehaviour(baseReview.ID)
+			resultReview, err := testcase.mockBehaviour(int(baseReview.ID))
 
 			if !testcase.expectError {
 				assert.NoError(t, err)

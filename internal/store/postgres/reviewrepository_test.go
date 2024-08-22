@@ -15,10 +15,10 @@ func TestPostgresReviewRepository_Create(t *testing.T) {
 	store := postgres.New(database)
 
 	testTable := []struct {
-		name           string
-		inputReview    *model.Review
-		create         func(*model.Review) error
-		expectedReview *model.Review
+		name        string
+		inputReview *model.Review
+		create      func(*model.Review) (int64, error)
+		expectError bool
 	}{
 		{
 			name: "valid",
@@ -28,13 +28,8 @@ func TestPostgresReviewRepository_Create(t *testing.T) {
 				Title:       "Review Title",
 				Description: "Description of the review",
 			},
-			create: store.Review().Create,
-			expectedReview: &model.Review{
-				Author:      "example_mail@example.com",
-				Rating:      3,
-				Title:       "Review Title",
-				Description: "Description of the review",
-			},
+			create:      store.Review().Create,
+			expectError: false,
 		},
 		{
 			name: "invalid email",
@@ -44,21 +39,21 @@ func TestPostgresReviewRepository_Create(t *testing.T) {
 				Title:       "Review Title",
 				Description: "Description of the review",
 			},
-			create:         store.Review().Create,
-			expectedReview: nil,
+			create:      store.Review().Create,
+			expectError: true,
 		},
 	}
 
 	for _, testcase := range testTable {
 		t.Run(testcase.name, func(t *testing.T) {
-			err := testcase.create(testcase.inputReview)
+			id, err := testcase.create(testcase.inputReview)
 
-			if testcase.expectedReview != nil {
-				testcase.expectedReview.ID = testcase.inputReview.ID
-				assert.EqualValues(t, testcase.expectedReview, testcase.inputReview)
-			} else {
-				assert.Zero(t, testcase.inputReview.ID)
+			if testcase.expectError {
 				assert.Error(t, err)
+				assert.Zero(t, id)
+			} else {
+				assert.NoError(t, err)
+				assert.NotZero(t, id)
 			}
 		})
 	}
@@ -71,33 +66,33 @@ func TestPostgresReviewRepository_FindOne(t *testing.T) {
 	store := postgres.New(database)
 
 	baseReview := model.TestReview(t)
-	if err := store.Review().Create(baseReview); err != nil {
+
+	id, err := store.Review().Create(baseReview)
+	if err != nil {
 		t.Fatal(err)
 	}
 
 	testTable := []struct {
 		name           string
-		inputId        uint
+		inputId        int
 		review         func(uint) (*model.Review, error)
 		expectedReview *model.Review
 	}{
 		{
 			name:           "valid",
-			inputId:        baseReview.ID,
-			review:         store.Review().FindOne,
+			inputId:        int(id),
 			expectedReview: baseReview,
 		},
 		{
 			name:           "not existing review",
 			inputId:        0,
-			review:         store.Review().FindOne,
 			expectedReview: nil,
 		},
 	}
 
 	for _, testcase := range testTable {
 		t.Run(testcase.name, func(t *testing.T) {
-			returnedReview, err := testcase.review(testcase.inputId)
+			returnedReview, err := store.Review().FindOne(testcase.inputId)
 
 			if testcase.expectedReview != nil {
 				assert.NoError(t, err)
@@ -160,39 +155,35 @@ func TestPostgresReviewRepository_Update(t *testing.T) {
 
 	store := postgres.New(database)
 
-	testUpdateFunc := func(r *model.Review) error {
-		testingReview := &model.Review{
-			Author:      "example_mail@example.com",
-			Rating:      3,
-			Title:       "review title",
-			Description: "review description",
-		}
-		if err := store.Review().Create(testingReview); err != nil {
-			t.Fatal(err)
-		}
+	baseReview := &model.Review{
+		Author:      "example_mail@example.com",
+		Rating:      3,
+		Title:       "review title",
+		Description: "review description",
+	}
 
-		r.ID = testingReview.ID
-
-		return store.Review().Update(r)
+	id, err := store.Review().Create(baseReview)
+	if err != nil {
+		t.Fatal(err)
 	}
 
 	testcases := []struct {
 		name           string
 		inputReview    *model.Review
 		expectedReview *model.Review
-		update         func(*model.Review) error
 		expectError    bool
 	}{
 		{
 			name: "valid",
 			inputReview: &model.Review{
+				ID:          uint(id),
 				Author:      "updated_mail@example.com",
 				Rating:      3,
 				Title:       "review title",
 				Description: "review description",
 			},
-			update: testUpdateFunc,
 			expectedReview: &model.Review{
+				ID:          uint(id),
 				Author:      "updated_mail@example.com",
 				Rating:      3,
 				Title:       "review title",
@@ -202,33 +193,33 @@ func TestPostgresReviewRepository_Update(t *testing.T) {
 		{
 			name:        "invalid id",
 			inputReview: &model.Review{},
-			update: func(r *model.Review) error {
-				return store.Review().Update(r)
-			},
 			expectError: true,
 		},
 		{
 			name: "emty author",
 			inputReview: &model.Review{
+				ID:          uint(id),
 				Rating:      4,
 				Title:       "review title",
 				Description: "review description",
 			},
-			update: testUpdateFunc,
 			expectedReview: &model.Review{
-				Author:      "example_mail@example.com",
+				ID:          uint(id),
+				Author:      "updated_mail@example.com",
 				Rating:      4,
 				Title:       "review title",
 				Description: "review description",
 			},
 		},
 		{
-			name:        "emty fields",
-			inputReview: &model.Review{},
-			update:      testUpdateFunc,
+			name: "emty fields",
+			inputReview: &model.Review{
+				ID: uint(id),
+			},
 			expectedReview: &model.Review{
-				Author:      "example_mail@example.com",
-				Rating:      3,
+				ID:          uint(id),
+				Author:      "updated_mail@example.com",
+				Rating:      4,
 				Title:       "review title",
 				Description: "review description",
 			},
@@ -236,17 +227,11 @@ func TestPostgresReviewRepository_Update(t *testing.T) {
 		{
 			name: "short fields",
 			inputReview: &model.Review{
+				ID:          uint(id),
 				Author:      "example_mail@example.com",
 				Rating:      3,
 				Title:       "as",
 				Description: "ds",
-			},
-			update: testUpdateFunc,
-			expectedReview: &model.Review{
-				Author:      "example_mail@example.com",
-				Rating:      3,
-				Title:       "review title",
-				Description: "review description",
 			},
 			expectError: true,
 		},
@@ -254,17 +239,20 @@ func TestPostgresReviewRepository_Update(t *testing.T) {
 
 	for _, testcase := range testcases {
 		t.Run(testcase.name, func(t *testing.T) {
-			err := testcase.update(testcase.inputReview)
+			rowCount, err := store.Review().Update(testcase.inputReview)
 
-			if !testcase.expectError {
-				testcase.expectedReview.ID = testcase.inputReview.ID
-				actualReview, _ := store.Review().FindOne(testcase.inputReview.ID)
-
-				assert.NoError(t, err)
-				assert.NotNil(t, actualReview)
-				assert.EqualValues(t, testcase.expectedReview, actualReview)
-			} else {
+			if testcase.expectError {
 				assert.Error(t, err)
+				assert.Zero(t, rowCount)
+			} else {
+				assert.NoError(t, err)
+				assert.EqualValues(t, 1, rowCount)
+
+				actualReview, err := store.Review().FindOne(int(id))
+				if err != nil {
+					t.Fatal(err)
+				}
+				assert.EqualValues(t, testcase.expectedReview, actualReview)
 			}
 
 		})
@@ -277,45 +265,37 @@ func TestPostgresReviewRepository_Delete(t *testing.T) {
 
 	store := postgres.New(database)
 
-	testDeleteFunc := func(r *model.Review) error {
-		return store.Review().Delete(r.ID)
+	baseReview := model.TestReview(t)
+	id, err := store.Review().Create(baseReview)
+	if err != nil {
+		t.Fatal(err)
 	}
 
 	testcases := []struct {
-		name      string
-		delete    func(*model.Review) error
-		expectErr bool
+		name             string
+		inputId          int
+		expectedRowCount int64
 	}{
 		{
-			name:      "valid",
-			delete:    testDeleteFunc,
-			expectErr: false,
+			name:             "valid",
+			inputId:          int(id),
+			expectedRowCount: 1,
 		},
 		{
-			name: "invalid id",
-			delete: func(r *model.Review) error {
-				return store.Review().Delete(0)
-			},
-			expectErr: true,
+			name:             "not existing record",
+			inputId:          int(id),
+			expectedRowCount: 0,
 		},
 	}
 
 	for _, testcase := range testcases {
 		t.Run(testcase.name, func(t *testing.T) {
-			baseReview := model.TestReview(t)
+			rowCount, err := store.Review().Delete(testcase.inputId)
+			assert.NoError(t, err)
+			assert.EqualValues(t, testcase.expectedRowCount, rowCount)
 
-			if err := store.Review().Create(baseReview); err != nil {
-				t.Fatal(err)
-			}
-			err := testcase.delete(baseReview)
-
-			if !testcase.expectErr {
-				selectedReview, _ := store.Review().FindOne(baseReview.ID)
-				assert.NoError(t, err)
-				assert.Nil(t, selectedReview)
-			} else {
-				assert.Error(t, err)
-			}
+			_, err = store.Review().FindOne(testcase.inputId)
+			assert.Error(t, err)
 		})
 	}
 }

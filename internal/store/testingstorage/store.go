@@ -17,7 +17,7 @@ func (s *Store) Review() store.ReviewRepositoryI {
 	if s.reviewRepository == nil {
 		s.reviewRepository = &ReviewRepository{
 			store:   s,
-			reviews: make(map[uint]*model.Review),
+			reviews: make(map[int]*model.Review),
 		}
 	}
 
