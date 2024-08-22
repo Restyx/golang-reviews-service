@@ -10,7 +10,7 @@ type ReviewRepository struct {
 	store *Store
 }
 
-func (r *ReviewRepository) Create(review *model.Review) (int64, error) {
+func (r *ReviewRepository) Create(review *model.Review) (int, error) {
 	if err := review.Validate(); err != nil {
 		return 0, err
 	}
@@ -20,7 +20,7 @@ func (r *ReviewRepository) Create(review *model.Review) (int64, error) {
 		return 0, err
 	}
 
-	return int64(review.ID), nil
+	return review.ID, nil
 }
 
 func (r *ReviewRepository) FindAll() ([]model.Review, error) {
@@ -49,6 +49,10 @@ func (r *ReviewRepository) FindAll() ([]model.Review, error) {
 }
 
 func (r *ReviewRepository) FindOne(id int) (*model.Review, error) {
+	if id == 0 {
+		return nil, fmt.Errorf("id is required")
+	}
+
 	review := &model.Review{}
 	if err := r.store.db.QueryRow("SELECT id, author, rating, title, description FROM reviews WHERE id=$1", id).Scan(&review.ID, &review.Author, &review.Rating, &review.Title, &review.Description); err != nil {
 		return nil, err
@@ -57,13 +61,13 @@ func (r *ReviewRepository) FindOne(id int) (*model.Review, error) {
 	return review, nil
 }
 
-func (r *ReviewRepository) Update(updateReview *model.Review) (int64, error) {
+func (r *ReviewRepository) Update(updateReview *model.Review) error {
 	if updateReview.ID == 0 {
-		return 0, fmt.Errorf("id is required")
+		return fmt.Errorf("id is required")
 	}
 
 	if err := updateReview.Validate(); err != nil {
-		return 0, err
+		return err
 	}
 
 	sqlQuery := `UPDATE reviews
@@ -77,35 +81,45 @@ func (r *ReviewRepository) Update(updateReview *model.Review) (int64, error) {
 
 	stmt, err := r.store.db.Prepare(sqlQuery)
 	if err != nil {
-		return 0, err
+		return err
 	}
 
 	res, err := stmt.Exec(updateReview.ID, updateReview.Author, updateReview.Rating, updateReview.Title, updateReview.Description)
 	if err != nil {
-		return 0, err
+		return err
 	}
 
 	rowCnt, err := res.RowsAffected()
 	if err != nil {
-		return 0, err
+		return err
+	}
+	if rowCnt == 0 {
+		return fmt.Errorf("record not found")
 	}
 
-	return rowCnt, nil
+	return nil
 }
 
-func (r *ReviewRepository) Delete(id int) (int64, error) {
+func (r *ReviewRepository) Delete(id int) error {
+	if id == 0 {
+		return fmt.Errorf("id is required")
+	}
+
 	stmt, err := r.store.db.Prepare("DELETE FROM reviews WHERE id=$1")
 	if err != nil {
-		return 0, err
+		return err
 	}
 	res, err := stmt.Exec(id)
 	if err != nil {
-		return 0, err
+		return err
 	}
 	rowCnt, err := res.RowsAffected()
 	if err != nil {
-		return 0, err
+		return err
+	}
+	if rowCnt == 0 {
+		return fmt.Errorf("record not found")
 	}
 
-	return rowCnt, nil
+	return nil
 }

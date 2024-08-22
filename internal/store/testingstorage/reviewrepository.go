@@ -11,16 +11,16 @@ type ReviewRepository struct {
 	reviews map[int]*model.Review
 }
 
-func (r *ReviewRepository) Create(review *model.Review) (int64, error) {
+func (r *ReviewRepository) Create(review *model.Review) (int, error) {
 	if err := review.Validate(); err != nil {
 		return 0, err
 	}
 
-	review.ID = uint(len(r.reviews) + 1)
+	review.ID = int(len(r.reviews) + 1)
 
-	r.reviews[int(review.ID)] = review
+	r.reviews[review.ID] = review
 
-	return int64(review.ID), nil
+	return review.ID, nil
 }
 
 func (r *ReviewRepository) FindAll() ([]model.Review, error) {
@@ -42,18 +42,18 @@ func (r *ReviewRepository) FindOne(id int) (*model.Review, error) {
 	return review, nil
 }
 
-func (r *ReviewRepository) Update(updatedReview *model.Review) (int64, error) {
+func (r *ReviewRepository) Update(updatedReview *model.Review) error {
 	if updatedReview.ID == 0 {
-		return 0, fmt.Errorf("id is required")
+		return fmt.Errorf("id is required")
 	}
 
 	if err := updatedReview.Validate(); err != nil {
-		return 0, err
+		return err
 	}
 
 	review, ok := r.reviews[int(updatedReview.ID)]
 	if !ok {
-		return 0, fmt.Errorf("record not found")
+		return fmt.Errorf("record not found")
 	}
 
 	if updatedReview.Author != "" {
@@ -77,16 +77,20 @@ func (r *ReviewRepository) Update(updatedReview *model.Review) (int64, error) {
 		updatedReview.Description = review.Description
 	}
 
-	return 1, nil
+	return nil
 }
 
-func (r *ReviewRepository) Delete(id int) (int64, error) {
+func (r *ReviewRepository) Delete(id int) error {
+	if id == 0 {
+		return fmt.Errorf("id is required")
+	}
+
 	_, ok := r.reviews[id]
 	if !ok {
-		return 0, nil
+		return fmt.Errorf("record not found")
 	}
 
 	delete(r.reviews, id)
 
-	return 1, nil
+	return nil
 }

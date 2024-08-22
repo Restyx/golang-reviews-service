@@ -83,7 +83,7 @@ func TestMessageHandlerService_Create(t *testing.T) {
 func TestMessageHandlerService_Update(t *testing.T) {
 	service := messagehandler.NewService(testingstorage.New())
 
-	mockBehaviourFunc := func(id uint, updateReview *model.Review) error {
+	mockBehaviourFunc := func(id int, updateReview *model.Review) error {
 		updateReview.ID = id
 
 		return service.Update(updateReview)
@@ -100,7 +100,7 @@ func TestMessageHandlerService_Update(t *testing.T) {
 		name           string
 		inputReview    *model.Review
 		inputUpdate    *model.Review
-		mockBehaviour  func(uint, *model.Review) error
+		mockBehaviour  func(int, *model.Review) error
 		expectedReview *model.Review
 		expectError    bool
 	}{
@@ -132,7 +132,7 @@ func TestMessageHandlerService_Update(t *testing.T) {
 				Title:       "updated Review Title",
 				Description: "updated Description of the review",
 			},
-			mockBehaviour: func(u uint, r *model.Review) error {
+			mockBehaviour: func(u int, r *model.Review) error {
 				return service.Update(r)
 			},
 			expectError: true,

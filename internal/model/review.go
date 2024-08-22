@@ -10,9 +10,9 @@ type Model interface {
 }
 
 type Review struct {
-	ID          uint   `json:"id" validate:"omitempty"`
+	ID          int    `json:"id" validate:"omitempty"`
 	Author      string `json:"author" validate:"required_without=ID,omitempty,email" conform:"trim"`
-	Rating      uint8  `json:"rating" validate:"required_without=ID,omitempty,gte=1,lte=10"`
+	Rating      int8   `json:"rating" validate:"required_without=ID,omitempty,gte=1,lte=10"`
 	Title       string `json:"title" validate:"required_without=ID,omitempty,gte=3,lte=50" conform:"trim"`
 	Description string `json:"description" validate:"required_without=ID,omitempty,gte=3,lte=500" conform:"trim"`
 }
