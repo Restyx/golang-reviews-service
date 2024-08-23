@@ -1,11 +1,11 @@
 rabbitmq_user = "admin"
 rabbitmq_pass = "admin"
-rabbitmq_host = "testingamqp"
+rabbitmq_host = "localhost"
 rabbitmq_port = "5672"
 
 postgres_user = "postgres"
 postgres_pass = "postgres"
-postgres_host = "testingdb"
+postgres_host = "localhost"
 postgres_port = "5432"
 postgres_db = "reviews_testing"
 postgres_ssl = "disable"

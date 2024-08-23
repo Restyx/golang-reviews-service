@@ -86,12 +86,12 @@ func TestConnect(t *testing.T) {
 			if !testcase.expectError {
 				assert.NoError(t, err)
 				assert.NotNil(t, rmq.Channel)
-				assert.NotNil(t, rmq.CloseConnection)
-				rmq.CloseConnection()
+				assert.NotNil(t, rmq.Connection)
+				rmq.Close()
 			} else {
 				assert.Error(t, err)
 				assert.Nil(t, rmq.Channel)
-				assert.Nil(t, rmq.CloseConnection)
+				assert.Nil(t, rmq.Connection)
 			}
 		})
 	}

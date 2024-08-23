@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/Restyx/golang-reviews-service/internal/model"
+	"github.com/Restyx/golang-reviews-service/internal/store"
 )
 
 type ReviewRepository struct {
@@ -34,9 +35,13 @@ func (r *ReviewRepository) FindAll() ([]model.Review, error) {
 }
 
 func (r *ReviewRepository) FindOne(id int) (*model.Review, error) {
+	if id == 0 {
+		return nil, store.ErrFieldMissing.AddFields("id")
+	}
+
 	review, ok := r.reviews[id]
 	if !ok {
-		return nil, fmt.Errorf("record not found")
+		return nil, store.ErrRecordNotFound.Record(fmt.Sprint(id))
 	}
 
 	return review, nil
@@ -44,7 +49,7 @@ func (r *ReviewRepository) FindOne(id int) (*model.Review, error) {
 
 func (r *ReviewRepository) Update(updatedReview *model.Review) error {
 	if updatedReview.ID == 0 {
-		return fmt.Errorf("id is required")
+		return store.ErrFieldMissing.AddFields("id")
 	}
 
 	if err := updatedReview.Validate(); err != nil {
@@ -53,7 +58,7 @@ func (r *ReviewRepository) Update(updatedReview *model.Review) error {
 
 	review, ok := r.reviews[int(updatedReview.ID)]
 	if !ok {
-		return fmt.Errorf("record not found")
+		return store.ErrRecordNotFound
 	}
 
 	if updatedReview.Author != "" {
@@ -82,12 +87,12 @@ func (r *ReviewRepository) Update(updatedReview *model.Review) error {
 
 func (r *ReviewRepository) Delete(id int) error {
 	if id == 0 {
-		return fmt.Errorf("id is required")
+		return store.ErrFieldMissing.AddFields("id")
 	}
 
 	_, ok := r.reviews[id]
 	if !ok {
-		return fmt.Errorf("record not found")
+		return store.ErrRecordNotFound.Record(fmt.Sprint(id))
 	}
 
 	delete(r.reviews, id)

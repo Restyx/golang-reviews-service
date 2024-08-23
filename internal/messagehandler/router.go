@@ -1,111 +1,217 @@
 package messagehandler
 
 import (
-	"context"
 	"encoding/json"
-	"time"
+	"errors"
+	"fmt"
 
-	"github.com/Restyx/golang-reviews-service/api/schemas"
+	"github.com/Restyx/golang-reviews-service/internal/model"
+	"github.com/Restyx/golang-reviews-service/internal/store"
 	"github.com/rabbitmq/amqp091-go"
 	"github.com/sirupsen/logrus"
 )
 
 const (
-	createReviewPattern string = "create-review"
-	updateReviewPattern string = "update-review"
-	deleteReviewPattern string = "delete-review"
-	readReviewPattern   string = "get-review"
-	readReviewsPattern  string = "get-reviews"
+	readReviewPattern   string = "reviews-get-one"
+	readReviewsPattern  string = "reviews-get-all"
+	createReviewPattern string = "reviews-create"
+	updateReviewPattern string = "reviews-update"
+	deleteReviewPattern string = "reviews-delete"
 )
 
-type messageRouter struct {
+type Server struct {
 	logger  logrus.Logger
 	service ServiceI
 	Channel *amqp091.Channel
 }
 
-func New(service ServiceI, channel *amqp091.Channel) *messageRouter {
-	return &messageRouter{
+func New(service ServiceI, channel *amqp091.Channel) *Server {
+	return &Server{
 		logger:  *logrus.New(),
 		service: service,
 		Channel: channel,
 	}
 }
 
-func (r *messageRouter) HandleMessages(messages <-chan amqp091.Delivery) {
+func (s *Server) HandleMessages(messages <-chan amqp091.Delivery) {
 	for msg := range messages {
-		message := &schemas.Message{}
-		json.Unmarshal(msg.Body, message)
-		r.logger.Infof("received message with pattern: '%s' and body: %+v", message.Pattern, message.Data)
+		s.logger.Infof("received message key: '%s'", msg.RoutingKey)
 
-		switch message.Pattern {
+		var (
+			nack   bool
+			reason error
+			body   []byte
+		)
+
+		switch msg.RoutingKey {
 		case readReviewPattern:
-			review, err := r.service.ReadOne(int(message.Data.ID))
-			r.rejectOnError(msg, err)
+			id, err := DecodeId(msg.Body)
+			if err != nil {
+				nack = true
+				reason = err
+				break
+			}
 
-			parsedReview, err := json.Marshal(review)
-			r.rejectOnError(msg, err)
+			review, err := s.service.ReadOne(id)
+			if err != nil {
+				nack = true
+				reason = err
+				break
+			}
 
-			err = r.rpcResponse(msg.ReplyTo, msg.CorrelationId, parsedReview)
-			r.rejectOnError(msg, err)
-
-			msg.Ack(false)
+			body, err = json.Marshal(review)
+			if err != nil {
+				nack = true
+				reason = err
+			}
 
 		case readReviewsPattern:
-			review, err := r.service.ReadAll()
-			r.rejectOnError(msg, err)
+			reviews, err := s.service.ReadAll()
+			if err != nil {
+				nack = true
+				reason = err
+				break
 
-			parsedReviews, err := json.Marshal(review)
-			r.rejectOnError(msg, err)
+			}
 
-			err = r.rpcResponse(msg.ReplyTo, msg.CorrelationId, parsedReviews)
-			r.rejectOnError(msg, err)
-			msg.Ack(false)
+			body, err = json.Marshal(reviews)
+			if err != nil {
+				nack = true
+				reason = err
+			}
 
 		case createReviewPattern:
-			err := r.service.Create(&message.Data)
-			r.rejectOnError(msg, err)
-			msg.Ack(false)
+			review, err := DecodeReview(msg.Body)
+			if err != nil {
+				nack = true
+				reason = err
+				break
+			}
+
+			err = s.service.Create(review)
+			if err != nil {
+				nack = true
+				reason = err
+			}
 
 		case updateReviewPattern:
-			err := r.service.Update(&message.Data)
-			r.rejectOnError(msg, err)
+			review, err := DecodeReview(msg.Body)
+			if err != nil {
+				nack = true
+				reason = err
+				break
+			}
 
-			msg.Ack(false)
+			err = s.service.Update(review)
+			if err != nil {
+				nack = true
+				reason = err
+			}
 
 		case deleteReviewPattern:
-			err := r.service.Delete(int(message.Data.ID))
-			r.rejectOnError(msg, err)
+			id, err := DecodeId(msg.Body)
+			if err != nil {
+				nack = true
+				reason = err
+				break
+			}
 
-			msg.Ack(false)
+			err = s.service.Delete(id)
+			if err != nil {
+				nack = true
+				reason = err
+			}
 
 		default:
-			r.logger.Error("invalid message pattern: ", message.Pattern)
+			nack = true
+			reason = errors.New("invalid message routing key")
+		}
+
+		if msg.ReplyTo != "" {
+			if nack {
+				body = []byte(fmt.Sprint(reason))
+			}
+
+			s.logger.Infof("sending reply with status code %v", getStatusCode(reason))
+			err := s.reply(msg, getStatusCode(reason), body)
+
+			if err != nil {
+				nack = true
+				reason = err
+			}
+		}
+
+		if nack {
+			s.logger.Errorf("message rejected: %s", reason)
 			msg.Nack(false, false)
+		} else {
+			s.logger.Infof("message acknowledged")
+			msg.Ack(false)
 		}
 	}
 }
 
-func (r *messageRouter) rejectOnError(msg amqp091.Delivery, err error) {
-	if err != nil {
-		r.logger.Error(err)
-		msg.Nack(false, false)
-	}
-}
-
-func (r *messageRouter) rpcResponse(replyTo string, correlationId string, parsedBody []byte) error {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	return r.Channel.PublishWithContext(ctx,
+func (s *Server) reply(msg amqp091.Delivery, statusCode int32, body []byte) error {
+	return s.Channel.Publish(
 		"",
-		replyTo,
+		msg.ReplyTo,
 		false,
 		false,
 		amqp091.Publishing{
+			Headers: amqp091.Table{
+				"code": statusCode,
+			},
+			CorrelationId: msg.CorrelationId,
 			ContentType:   "application/json",
-			CorrelationId: correlationId,
-			Body:          parsedBody,
+			Body:          []byte(body),
 		},
 	)
+}
+
+func getStatusCode(inputError error) int32 {
+	var statusCode int32
+	switch {
+	case inputError == nil:
+		statusCode = 200
+	case errors.As(inputError, &store.ErrRecordNotFound):
+		statusCode = 404
+	case errors.As(inputError, &store.ErrFieldMissing):
+		statusCode = 400
+	default:
+		statusCode = 500
+	}
+
+	return statusCode
+}
+
+func DecodeReview(body []byte) (*model.Review, error) {
+	review := &model.Review{}
+
+	if err := json.Unmarshal(body, review); err != nil {
+		return nil, err
+	}
+
+	return review, nil
+}
+
+func DecodeReviewSlice(body []byte) ([]model.Review, error) {
+	var review []model.Review
+
+	if err := json.Unmarshal(body, &review); err != nil {
+		return nil, err
+	}
+
+	return review, nil
+}
+
+func DecodeId(body []byte) (int, error) {
+	var data struct {
+		Id int `json:"id"`
+	}
+
+	if err := json.Unmarshal(body, &data); err != nil {
+		return 0, err
+	}
+
+	return data.Id, nil
 }

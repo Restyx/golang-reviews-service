@@ -20,12 +20,11 @@ func Start(config *Config) error {
 	if err := rmq.Connect(config.RmqUser, config.RmqPassword, config.RmqHost, config.RmqPort); err != nil {
 		return err
 	}
-	defer rmq.CloseConnection()
+	defer rmq.Close()
 
 	store := postgres.New(database)
-	reviewsService := &Service{
-		store: store,
-	}
+
+	reviewsService := NewService(store)
 
 	reviewsRouter := New(reviewsService, rmq.Channel)
 
@@ -46,10 +45,18 @@ func connectDB(user, password, host, port, datatbase string) (*sql.DB, error) {
 	return database, nil
 }
 
-func listen(Router *messageRouter) error {
+func listen(Router *Server) error {
 	queue, err := Router.Channel.QueueDeclare("reviews_queue", true, false, false, false, nil)
 	if err != nil {
 		return err
+	}
+
+	for _, s := range []string{readReviewPattern, readReviewsPattern, createReviewPattern, updateReviewPattern, deleteReviewPattern} {
+		log.Printf("Binding queue %s to exchange %s with routing key %s", queue.Name, "reviews", s)
+
+		if err := Router.Channel.QueueBind(queue.Name, s, "reviews", false, nil); err != nil {
+			return err
+		}
 	}
 
 	msgs, err := Router.Channel.Consume(queue.Name, "", false, false, false, false, nil)

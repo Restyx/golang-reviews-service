@@ -33,9 +33,7 @@ func (h *Service) Update(data *model.Review) error {
 }
 
 func (h *Service) Delete(id int) error {
-
 	return h.store.Review().Delete(id)
-
 }
 
 func (h *Service) ReadOne(id int) (*model.Review, error) {

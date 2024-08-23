@@ -1,9 +1,11 @@
 package postgres
 
 import (
+	"database/sql"
 	"fmt"
 
 	"github.com/Restyx/golang-reviews-service/internal/model"
+	"github.com/Restyx/golang-reviews-service/internal/store"
 )
 
 type ReviewRepository struct {
@@ -50,11 +52,14 @@ func (r *ReviewRepository) FindAll() ([]model.Review, error) {
 
 func (r *ReviewRepository) FindOne(id int) (*model.Review, error) {
 	if id == 0 {
-		return nil, fmt.Errorf("id is required")
+		return nil, store.ErrFieldMissing.AddFields("id")
 	}
 
 	review := &model.Review{}
 	if err := r.store.db.QueryRow("SELECT id, author, rating, title, description FROM reviews WHERE id=$1", id).Scan(&review.ID, &review.Author, &review.Rating, &review.Title, &review.Description); err != nil {
+		if err == sql.ErrNoRows {
+			err = store.ErrRecordNotFound.Record(fmt.Sprint(id))
+		}
 		return nil, err
 	}
 
@@ -63,7 +68,7 @@ func (r *ReviewRepository) FindOne(id int) (*model.Review, error) {
 
 func (r *ReviewRepository) Update(updateReview *model.Review) error {
 	if updateReview.ID == 0 {
-		return fmt.Errorf("id is required")
+		return store.ErrFieldMissing.AddFields("id")
 	}
 
 	if err := updateReview.Validate(); err != nil {
@@ -94,7 +99,7 @@ func (r *ReviewRepository) Update(updateReview *model.Review) error {
 		return err
 	}
 	if rowCnt == 0 {
-		return fmt.Errorf("record not found")
+		return store.ErrRecordNotFound.Record(fmt.Sprint(updateReview.ID))
 	}
 
 	return nil
@@ -102,7 +107,7 @@ func (r *ReviewRepository) Update(updateReview *model.Review) error {
 
 func (r *ReviewRepository) Delete(id int) error {
 	if id == 0 {
-		return fmt.Errorf("id is required")
+		return store.ErrFieldMissing.AddFields("id")
 	}
 
 	stmt, err := r.store.db.Prepare("DELETE FROM reviews WHERE id=$1")
@@ -118,7 +123,7 @@ func (r *ReviewRepository) Delete(id int) error {
 		return err
 	}
 	if rowCnt == 0 {
-		return fmt.Errorf("record not found")
+		return store.ErrRecordNotFound.Record(fmt.Sprint(id))
 	}
 
 	return nil

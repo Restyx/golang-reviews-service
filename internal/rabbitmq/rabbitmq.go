@@ -7,8 +7,8 @@ import (
 )
 
 type Rabbitmq struct {
-	Channel         *amqp.Channel
-	CloseConnection func() error
+	Connection *amqp.Connection
+	Channel    *amqp.Channel
 }
 
 func New() *Rabbitmq {
@@ -28,8 +28,20 @@ func (rmq *Rabbitmq) Connect(user string, password string, host string, port str
 		return err
 	}
 
+	if err := channel.ExchangeDeclare("reviews", "topic", true, false, false, false, nil); err != nil {
+		return err
+	}
+
+	if err := channel.Qos(1, 0, false); err != nil {
+		return err
+	}
+
+	rmq.Connection = connection
 	rmq.Channel = channel
-	rmq.CloseConnection = connection.Close
 
 	return nil
+}
+
+func (rmq *Rabbitmq) Close() {
+	rmq.Connection.Close()
 }
